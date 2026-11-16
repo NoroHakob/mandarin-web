@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Author's Expo app, reference only.
+    "reference/**",
   ]),
 ]);
 
