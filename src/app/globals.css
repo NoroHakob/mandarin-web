@@ -15,6 +15,19 @@
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
   --font-garamond: "EB Garamond", Georgia, "Times New Roman", serif;
+
+  --animate-step-in: step-in 250ms ease-out both;
+
+  @keyframes step-in {
+    from {
+      opacity: 0;
+      transform: translateX(16px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 }
 
 html,
@@ -41,4 +54,15 @@ body {
   overflow: hidden;
   /* Creates a containing block so position:fixed children stay inside the column. */
   transform: translateZ(0);
+}
+
+/* Hide scrollbars inside the app (scrolling still works). */
+.app-column,
+.app-column * {
+  scrollbar-width: none;
+}
+
+.app-column::-webkit-scrollbar,
+.app-column *::-webkit-scrollbar {
+  display: none;
 }

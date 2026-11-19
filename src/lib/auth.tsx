@@ -25,6 +25,11 @@ export type Profile = {
   updated_at: string | null;
 };
 
+/** The only profile columns users may write (premium fields are server-managed). */
+export type ProfileFields = Partial<
+  Pick<Profile, "full_name" | "chinese_level" | "motivations" | "interests" | "onboarding_completed">
+>;
+
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
@@ -33,6 +38,8 @@ type AuthContextValue = {
   isPremium: boolean;
   premiumExpiresAt: string | null;
   refreshProfile: () => Promise<void>;
+  /** Upserts the current user's profile, then reloads it. Throws on failure. */
+  saveProfile: (fields: ProfileFields) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -84,6 +91,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshProfile = useCallback(() => loadProfile(session), [loadProfile, session]);
 
+  const saveProfile = useCallback(
+    async (fields: ProfileFields) => {
+      if (!session) throw new Error("Not signed in");
+      const { error } = await supabase.from("profiles").upsert({
+        id: session.user.id,
+        ...fields,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+      await loadProfile(session);
+    },
+    [loadProfile, session],
+  );
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
@@ -101,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isPremium,
         premiumExpiresAt,
         refreshProfile,
+        saveProfile,
         signOut,
       }}
     >
