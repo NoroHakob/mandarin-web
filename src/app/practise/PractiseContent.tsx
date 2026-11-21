@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import LessonContent from "@/components/lesson/LessonContent";
 import VocabularyIntroScreen from "@/components/lesson/VocabularyIntroScreen";
 import { findLesson, type Lesson } from "@/lib/course";
 
@@ -30,10 +31,7 @@ function PractiseSession({ lesson }: { lesson: Lesson }) {
       {isStudyingVocabulary ? (
         <VocabularyIntroScreen questions={lesson.questions} onStartLesson={startLesson} />
       ) : (
-        // Placeholder until LessonContent is ported.
-        <main className="flex flex-1 items-center justify-center px-8 text-center">
-          <p className="text-lg font-semibold text-text">Lesson questions — next step</p>
-        </main>
+        <LessonContent questions={lesson.questions} lessonId={lesson.id} />
       )}
     </div>
   );
