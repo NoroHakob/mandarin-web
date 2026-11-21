@@ -3,6 +3,7 @@ import "@fontsource/eb-garamond/500-italic.css";
 import "./globals.css";
 import { Toaster } from "sonner";
 import AppGate from "@/components/auth/AppGate";
+import { PaywallProvider } from "@/components/subscription/PaywallProvider";
 import { AuthProvider } from "@/lib/auth";
 
 export const metadata: Metadata = {
@@ -22,7 +23,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <div className="app-column">
           <AuthProvider>
-            <AppGate>{children}</AppGate>
+            <PaywallProvider>
+              <AppGate>{children}</AppGate>
+            </PaywallProvider>
           </AuthProvider>
           <Toaster position="top-center" richColors />
         </div>

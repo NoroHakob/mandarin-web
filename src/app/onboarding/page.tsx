@@ -12,6 +12,7 @@ import {
   IoPeopleOutline,
 } from "react-icons/io5";
 import { toast } from "sonner";
+import { usePaywall } from "@/components/subscription/PaywallProvider";
 import { useAuth } from "@/lib/auth";
 
 const LEVELS = [
@@ -61,6 +62,7 @@ function StepHeading({ title, subtitle }: { title: string; subtitle?: string }) 
 export default function OnboardingPage() {
   const router = useRouter();
   const { saveProfile } = useAuth();
+  const { openPaywall } = usePaywall();
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
@@ -88,7 +90,8 @@ export default function OnboardingPage() {
         interests,
         onboarding_completed: true,
       });
-      // TODO(paywall): open the Paywall here; its onClose should do router.replace("/").
+      // The Paywall lives in PaywallProvider, so it stays open across this navigation.
+      openPaywall();
       router.replace("/");
     } catch (err) {
       console.error("Error saving profile:", err);
