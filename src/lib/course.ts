@@ -113,3 +113,8 @@ export function findLesson(lessonId: string): Lesson | undefined {
   }
   return undefined;
 }
+
+/** Finds a preset conversation scenario by id. */
+export function findScenario(scenarioId: string): ConversationScenario | undefined {
+  return COURSE_DATA.scenarios.find((s) => s.id === scenarioId);
+}

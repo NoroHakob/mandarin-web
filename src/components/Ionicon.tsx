@@ -22,6 +22,7 @@ import {
   IoChatbubblesOutline,
   IoCheckmarkCircleOutline,
   IoColorPaletteOutline,
+  IoColorWand,
   IoCompassOutline,
   IoConstructOutline,
   IoCreateOutline,
@@ -81,7 +82,8 @@ import {
 } from "react-icons/io5";
 
 /**
- * Ionicons names used in src/data/course_content.json (lessons, reviews and scenarios),
+ * Ionicons names used in src/data/course_content.json (lessons, reviews and scenarios) plus
+ * "color-wand" for custom scenarios (src/lib/customScenarios.ts),
  * mapped to their react-icons/io5 components. Regenerate this list when the course data changes.
  */
 const IONICONS = {
@@ -106,6 +108,7 @@ const IONICONS = {
   "chatbubbles-outline": IoChatbubblesOutline,
   "checkmark-circle-outline": IoCheckmarkCircleOutline,
   "color-palette-outline": IoColorPaletteOutline,
+  "color-wand": IoColorWand,
   "compass-outline": IoCompassOutline,
   "construct-outline": IoConstructOutline,
   "create-outline": IoCreateOutline,
