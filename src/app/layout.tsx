@@ -15,6 +15,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: "#e9e9ee",
+  // The on-screen keyboard shrinks the layout viewport (so 100dvh shrinks with it) instead of
+  // overlaying the page, which keeps the chat input bar above the keyboard.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -34,9 +34,17 @@ export type GeminiPart =
   | { text: string }
   | { inline_data: { mime_type: string; data: string } };
 
-export interface GenerateContentOptions {
-  /** Parts of the single user turn. Put untrusted user text here, never in systemInstruction. */
+export interface GeminiContent {
+  role: "user" | "model";
   parts: GeminiPart[];
+}
+
+export interface GenerateContentOptions {
+  /**
+   * The conversation: either the parts of a single user turn, or full multi-turn contents.
+   * Put untrusted user text here, never in systemInstruction.
+   */
+  input: { parts: GeminiPart[] } | { contents: GeminiContent[] };
   systemInstruction?: string;
   /** Ask for raw JSON output (generationConfig.responseMimeType = "application/json"). */
   json?: boolean;
@@ -80,7 +88,7 @@ function attemptsLabel(attempts: number) {
  * text ("" when there is no candidate, e.g. blocked output). Throws GeminiError.
  */
 export async function generateContent({
-  parts,
+  input,
   systemInstruction,
   json = false,
   temperature,
@@ -88,7 +96,8 @@ export async function generateContent({
 }: GenerateContentOptions): Promise<string> {
   const { apiKey, model } = getConfig();
   const deadline = Date.now() + timeoutMs;
-  const contents = [{ role: "user", parts }];
+  const contents: GeminiContent[] =
+    "contents" in input ? input.contents : [{ role: "user", parts: input.parts }];
 
   let attempts = 0;
   let useThinkingConfig = true;
@@ -164,7 +173,9 @@ export async function generateContent({
 export function transcribeToPinyin(base64Wav: string): Promise<string> {
   // No candidate (e.g. blocked or silent audio) comes back as "", which counts as "no speech".
   return generateContent({
-    parts: [{ text: TRANSCRIBE_PROMPT }, { inline_data: { mime_type: "audio/wav", data: base64Wav } }],
+    input: {
+      parts: [{ text: TRANSCRIBE_PROMPT }, { inline_data: { mime_type: "audio/wav", data: base64Wav } }],
+    },
     temperature: 0,
   });
 }

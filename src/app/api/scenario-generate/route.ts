@@ -1,5 +1,6 @@
 import { GeminiError, generateContent } from "@/lib/gemini";
-import { getSupabaseAdmin, getUserFromAccessToken } from "@/lib/supabase-admin";
+import { isUserPremium } from "@/lib/premium";
+import { getUserFromAccessToken } from "@/lib/supabase-admin";
 
 // Port of reference/supabase/functions/scenario-generate (OpenRouter → Gemini REST API).
 // Runs on the Node.js runtime (the default). `export const runtime` is rejected under cacheComponents.
@@ -25,11 +26,6 @@ type ScenarioGenerateResponse = {
   tasks: string[];
   difficulty: Difficulty;
   phrasebook: PhrasebookEntry[];
-};
-
-type ProfileRow = {
-  is_premium: boolean | null;
-  premium_expires_at: string | null;
 };
 
 const normalizeText = (value: unknown, maxLen: number): string => {
@@ -120,12 +116,6 @@ function buildUserInput(myRole: string, aiRole: string, sceneDescription: string
 - Scene description: ${sceneDescription}`;
 }
 
-/** Same rule as hasActivePremium in src/lib/auth.tsx: flagged AND expiry in the future. */
-function hasActivePremium(profile: ProfileRow | null): boolean {
-  if (!profile?.is_premium || !profile.premium_expires_at) return false;
-  return new Date(profile.premium_expires_at).getTime() > Date.now();
-}
-
 function json(body: unknown, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
@@ -135,23 +125,20 @@ export async function POST(request: Request) {
   if (!match) return json({ error: "Unauthorized" }, 401);
 
   // Never trust the client's premium state: read it from the DB.
+  let userId: string;
   try {
     const user = await getUserFromAccessToken(match[1]);
     if (!user) return json({ error: "Unauthorized" }, 401);
-
-    const { data: profile, error } = await getSupabaseAdmin()
-      .from("profiles")
-      .select("is_premium,premium_expires_at")
-      .eq("id", user.id)
-      .maybeSingle<ProfileRow>();
-    if (error) {
-      console.error("scenario-generate: profile read failed");
-      return json({ error: "Could not generate scenario" }, 500);
-    }
-    if (!hasActivePremium(profile)) return json({ error: "Premium required" }, 403);
+    userId = user.id;
   } catch {
     console.error("scenario-generate: auth check failed");
     return json({ error: "Could not generate scenario" }, 502);
+  }
+  try {
+    if (!(await isUserPremium(userId))) return json({ error: "Premium required" }, 403);
+  } catch {
+    console.error("scenario-generate: profile read failed");
+    return json({ error: "Could not generate scenario" }, 500);
   }
 
   // Cheap rejection from the header first, then the real size of what was sent.
@@ -185,7 +172,7 @@ export async function POST(request: Request) {
   try {
     output = await generateContent({
       systemInstruction: SYSTEM_PROMPT,
-      parts: [{ text: buildUserInput(myRole, aiRole, sceneDescription) }],
+      input: { parts: [{ text: buildUserInput(myRole, aiRole, sceneDescription) }] },
       json: true,
       timeoutMs: TIMEOUT_MS,
     });
