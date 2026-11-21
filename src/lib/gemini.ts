@@ -1,14 +1,15 @@
 import "server-only";
 
 /**
- * Speech-to-pinyin with the Google Gemini REST API (port of reference/supabase/functions/transcribe-audio,
- * which went through OpenRouter). Server-only: GEMINI_API_KEY must never reach the client.
- * Never log request/response bodies, audio or transcripts: only HTTP status and attempt count.
+ * Google Gemini REST API helpers (the reference went through OpenRouter). Server-only:
+ * GEMINI_API_KEY must never reach the client.
+ * Never log request/response bodies, prompts, audio, transcripts or model output: only HTTP status
+ * and attempt count.
  */
 
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
-/** Total budget for every attempt and backoff together. */
-const TIMEOUT_MS = 20_000;
+/** Default total budget for every attempt and backoff together. */
+const DEFAULT_TIMEOUT_MS = 20_000;
 /** Waits before the 2nd and 3rd try after a 500/503. */
 const SERVER_ERROR_BACKOFF_MS = [600, 1500];
 const RETRYABLE_STATUSES = new Set([500, 503]);
@@ -29,6 +30,21 @@ export class GeminiError extends Error {
   }
 }
 
+export type GeminiPart =
+  | { text: string }
+  | { inline_data: { mime_type: string; data: string } };
+
+export interface GenerateContentOptions {
+  /** Parts of the single user turn. Put untrusted user text here, never in systemInstruction. */
+  parts: GeminiPart[];
+  systemInstruction?: string;
+  /** Ask for raw JSON output (generationConfig.responseMimeType = "application/json"). */
+  json?: boolean;
+  temperature?: number;
+  /** Total budget for all attempts and backoffs. */
+  timeoutMs?: number;
+}
+
 interface GenerateContentResponse {
   candidates?: Array<{
     content?: { parts?: Array<{ text?: string; thought?: boolean }> };
@@ -42,7 +58,7 @@ function getConfig() {
   return { apiKey, model };
 }
 
-/** Transcription needs no reasoning. Gemini 3+ uses thinkingLevel; 2.5 turns thinking off with a zero budget. */
+/** Our tasks need little reasoning. Gemini 3+ uses thinkingLevel; 2.5 turns thinking off with a zero budget. */
 function minimalThinkingConfig(model: string) {
   return /^gemini-[34]/.test(model) ? { thinkingLevel: "low" } : { thinkingBudget: 0 };
 }
@@ -58,16 +74,21 @@ function attemptsLabel(attempts: number) {
   return `${attempts} attempt${attempts === 1 ? "" : "s"}`;
 }
 
-/** Transcribes base64 WAV audio to pinyin. Returns "" when no speech is detected. */
-export async function transcribeToPinyin(base64Wav: string): Promise<string> {
+/**
+ * One generateContent call with retries: once without thinkingConfig if the model rejects it (400),
+ * and with backoff on 500/503 while the time budget allows. Returns the concatenated non-thought
+ * text ("" when there is no candidate, e.g. blocked output). Throws GeminiError.
+ */
+export async function generateContent({
+  parts,
+  systemInstruction,
+  json = false,
+  temperature,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+}: GenerateContentOptions): Promise<string> {
   const { apiKey, model } = getConfig();
-  const deadline = Date.now() + TIMEOUT_MS;
-  const contents = [
-    {
-      role: "user",
-      parts: [{ text: TRANSCRIBE_PROMPT }, { inline_data: { mime_type: "audio/wav", data: base64Wav } }],
-    },
-  ];
+  const deadline = Date.now() + timeoutMs;
+  const contents = [{ role: "user", parts }];
 
   let attempts = 0;
   let useThinkingConfig = true;
@@ -81,9 +102,11 @@ export async function transcribeToPinyin(base64Wav: string): Promise<string> {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
+          ...(systemInstruction ? { systemInstruction: { parts: [{ text: systemInstruction }] } } : {}),
           contents,
           generationConfig: {
-            temperature: 0,
+            ...(temperature !== undefined ? { temperature } : {}),
+            ...(json ? { responseMimeType: "application/json" } : {}),
             ...(useThinkingConfig ? { thinkingConfig: minimalThinkingConfig(model) } : {}),
           },
         }),
@@ -129,11 +152,19 @@ export async function transcribeToPinyin(base64Wav: string): Promise<string> {
     throw new GeminiError("failed", `Gemini returned invalid JSON after ${attemptsLabel(attempts)}`);
   }
 
-  // No candidate (e.g. blocked or silent audio) counts as "no speech".
-  const parts = data.candidates?.[0]?.content?.parts ?? [];
-  return parts
+  const outputParts = data.candidates?.[0]?.content?.parts ?? [];
+  return outputParts
     .filter((part) => !part.thought && typeof part.text === "string")
     .map((part) => part.text)
     .join("")
     .trim();
+}
+
+/** Transcribes base64 WAV audio to pinyin. Returns "" when no speech is detected. */
+export function transcribeToPinyin(base64Wav: string): Promise<string> {
+  // No candidate (e.g. blocked or silent audio) comes back as "", which counts as "no speech".
+  return generateContent({
+    parts: [{ text: TRANSCRIBE_PROMPT }, { inline_data: { mime_type: "audio/wav", data: base64Wav } }],
+    temperature: 0,
+  });
 }

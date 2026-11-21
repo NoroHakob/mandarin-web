@@ -32,8 +32,8 @@ function isPhrasebookEntry(value: unknown): value is PhrasebookEntry {
   );
 }
 
-/** Rebuilds a scenario from untrusted storage, or returns null if required fields are missing. */
-function toScenario(value: unknown): ConversationScenario | null {
+/** Rebuilds a custom scenario from untrusted data (storage, API), or null if required fields are missing. */
+export function toCustomScenario(value: unknown): ConversationScenario | null {
   if (!isRecord(value)) return null;
   const { id, title, icon, isFree, description, goal, tasks, difficulty, phrasebook } = value;
   if (
@@ -77,7 +77,7 @@ export function parseCustomScenarios(raw: string | null): StorageType {
   const store: StorageType = {};
   for (const [key, entry] of Object.entries(parsed)) {
     if (!isRecord(entry) || typeof entry.createdAt !== "string") continue;
-    const scenario = toScenario(entry.scenario);
+    const scenario = toCustomScenario(entry.scenario);
     if (scenario && scenario.id === key) store[key] = { scenario, createdAt: entry.createdAt };
   }
   return store;

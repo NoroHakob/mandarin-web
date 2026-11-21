@@ -128,6 +128,12 @@ export default function ConversationsPage() {
 
   const closeCreateSheet = useCallback(() => setIsCreatingCustom(false), []);
 
+  // As in the reference: after generating, close Create and show the new scenario's details.
+  const handleScenarioCreated = (scenario: ConversationScenario) => {
+    setIsCreatingCustom(false);
+    setSelectedScenario(scenario);
+  };
+
   return (
     <div className="flex h-full flex-col">
       <header className="shrink-0 border-b border-border px-4 py-3">
@@ -194,7 +200,9 @@ export default function ConversationsPage() {
         </section>
       </main>
 
-      {isCreatingCustom && <CreateScenarioSheet onClose={closeCreateSheet} />}
+      {isCreatingCustom && (
+        <CreateScenarioSheet onClose={closeCreateSheet} onCreated={handleScenarioCreated} />
+      )}
       {selectedScenario && (
         <ScenarioDetailSheet
           key={selectedScenario.id}
