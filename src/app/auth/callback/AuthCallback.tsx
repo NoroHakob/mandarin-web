@@ -21,7 +21,7 @@ export default function AuthCallback() {
 
     supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
       if (error) setExchangeError(error.message);
-      else router.replace("/");
+      else router.replace("/lessons");
     });
   }, [code, urlError, router]);
 

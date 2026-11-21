@@ -105,8 +105,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [loadProfile, session],
   );
 
+  /** Signs out everywhere; if the server call fails, still clears the local session. Throws only if both fail. */
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (!error) return;
+    } catch {
+      // Fall through to a local sign-out.
+    }
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+    if (error) throw error;
   }, []);
 
   const premiumExpiresAt = profile?.premium_expires_at ?? null;

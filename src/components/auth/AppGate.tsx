@@ -34,7 +34,7 @@ export default function AppGate({ children }: { children: ReactNode }) {
   let redirectTo: string | null = null;
   if (!isPublic && !loading && session) {
     if (!onboarded && !onOnboarding) redirectTo = ONBOARDING_PATH;
-    else if (onboarded && onOnboarding) redirectTo = "/";
+    else if (onboarded && onOnboarding) redirectTo = "/lessons";
   }
 
   useEffect(() => {

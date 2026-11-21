@@ -92,7 +92,7 @@ export default function OnboardingPage() {
       });
       // The Paywall lives in PaywallProvider, so it stays open across this navigation.
       openPaywall();
-      router.replace("/");
+      router.replace("/lessons");
     } catch (err) {
       console.error("Error saving profile:", err);
       toast.error("Failed to save your profile. Please try again.");
