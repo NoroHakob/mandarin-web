@@ -3,15 +3,28 @@ import { GeminiError, generateContent, type GeminiContent } from "@/lib/gemini";
 import { isUserPremium } from "@/lib/premium";
 import { getUserFromAccessToken } from "@/lib/supabase-admin";
 
-// Port of reference/supabase/functions/chat-completion, text turns only (OpenRouter → Gemini).
+// Port of reference/supabase/functions/chat-completion (OpenRouter → Gemini): text and voice turns.
 // Runs on the Node.js runtime (the default). `export const runtime` is rejected under cacheComponents.
-// Never log messages, scenario text, model output or tokens here — short error messages only.
+// Never log messages, audio, transcripts, scenario text, model output or tokens here — short error
+// messages only.
 
+/** Body limit for text-only turns. */
 const MAX_BODY_BYTES = 32 * 1024;
+/** Same audio cap as /api/transcribe-audio: ~1.5 MB of base64 ≈ 30 s of 16 kHz mono WAV. */
+const MAX_AUDIO_BASE64_LENGTH = 1_500_000;
+/** Body limit when inputAudio is present: the audio plus the usual text payload. */
+const MAX_BODY_BYTES_WITH_AUDIO = MAX_AUDIO_BASE64_LENGTH + MAX_BODY_BYTES;
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+const MAX_TRANSCRIPT_LENGTH = 200;
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_LENGTH = 500;
 const MAX_REPLY_FIELD_LENGTH = 500;
 const TIMEOUT_MS = 25_000;
+const AUDIO_TIMEOUT_MS = 30_000;
+
+// Same instruction as the reference's audio turn.
+const AUDIO_INSTRUCTION =
+  "The user sent an audio message. The user is speaking Mandarin Chinese. Transcribe the speech directly into Chinese characters (Hanzi). Do NOT translate into English. If the speech is unclear, infer the most likely Chinese characters. Include this transcription in the `userTranscript` field and its pinyin in `userTranscriptPinyin`.";
 
 type Difficulty = "Beginner" | "Intermediate" | "Advanced";
 const DIFFICULTIES: ReadonlySet<string> = new Set(["Beginner", "Intermediate", "Advanced"]);
@@ -33,6 +46,9 @@ type ChatCompletionResponse = {
   pinyin: string;
   english: string;
   conversationComplete: boolean;
+  /** Voice turns only: what the user said, in Hanzi and in pinyin with tone marks. */
+  userTranscript?: string;
+  userTranscriptPinyin?: string;
 };
 
 function json(body: unknown, status = 200) {
@@ -94,9 +110,14 @@ function toGeminiContents(messages: ChatMessage[]): GeminiContent[] {
   return contents;
 }
 
-// Same prompt as the reference, minus the audio-only userTranscript fields (text turns only here),
-// plus the scenario's tasks so the model can judge conversationComplete against them.
-function buildSystemPrompt(scenario: PromptScenario) {
+// Same prompt as the reference, plus the scenario's tasks so the model can judge
+// conversationComplete against them. The userTranscript fields are only asked for on voice turns.
+function buildSystemPrompt(scenario: PromptScenario, hasAudio: boolean) {
+  const transcriptFields = hasAudio
+    ? `
+- userTranscript: Include this ONLY if the user's latest input was audio. It should be the best-effort transcript of what the user said.
+- userTranscriptPinyin: Include this ONLY if the user's latest input was audio. It should be the Pinyin (with tone marks) for userTranscript.`
+    : "";
   return `
 You are a helpful language tutor for Mandarin Chinese.
 You are roleplaying a scenario with the user.
@@ -120,7 +141,7 @@ Your response must be a valid JSON object with the following fields:
 - hanzi: The response in Chinese characters (Hanzi) (same as text).
 - pinyin: The Pinyin romanization of the response.
 - english: The English translation of the response.
-- conversationComplete: A boolean (true/false). Set this to true ONLY when the conversation has naturally reached a satisfying conclusion based on the scenario goal. For example, if the user successfully completed their order at a restaurant, booked a hotel room, or finished the task described in the scenario. Otherwise, set it to false.
+- conversationComplete: A boolean (true/false). Set this to true ONLY when the conversation has naturally reached a satisfying conclusion based on the scenario goal. For example, if the user successfully completed their order at a restaurant, booked a hotel room, or finished the task described in the scenario. Otherwise, set it to false.${transcriptFields}
 
 Do not include any markdown formatting (like \`\`\`json). Just return the raw JSON object.
 Keep the conversation natural and appropriate for the scenario.
@@ -128,7 +149,7 @@ Keep the conversation natural and appropriate for the scenario.
 }
 
 /** Validates the model's JSON reply; null if any field has the wrong type or there's no Chinese text. */
-function parseReply(output: string): ChatCompletionResponse | null {
+function parseReply(output: string, hasAudio: boolean): ChatCompletionResponse | null {
   let value: unknown;
   try {
     value = JSON.parse(output);
@@ -136,8 +157,11 @@ function parseReply(output: string): ChatCompletionResponse | null {
     return null;
   }
   if (!isRecord(value)) return null;
-  const { text, hanzi, pinyin, english, conversationComplete } = value;
+  const { text, hanzi, pinyin, english, conversationComplete, userTranscript, userTranscriptPinyin } =
+    value;
+  const isOptionalString = (v: unknown) => v === undefined || v === null || typeof v === "string";
   if (
+    (hasAudio && (!isOptionalString(userTranscript) || !isOptionalString(userTranscriptPinyin))) ||
     (text !== undefined && typeof text !== "string") ||
     (hanzi !== undefined && typeof hanzi !== "string") ||
     typeof pinyin !== "string" ||
@@ -149,22 +173,47 @@ function parseReply(output: string): ChatCompletionResponse | null {
   // As in the reference client: text falls back to hanzi (and vice versa here).
   const chinese = normalizeText(hanzi, MAX_REPLY_FIELD_LENGTH) || normalizeText(text, MAX_REPLY_FIELD_LENGTH);
   if (!chinese) return null;
-  return {
+  const reply: ChatCompletionResponse = {
     text: normalizeText(text, MAX_REPLY_FIELD_LENGTH) || chinese,
     hanzi: chinese,
     pinyin: normalizeText(pinyin, MAX_REPLY_FIELD_LENGTH),
     english: normalizeText(english, MAX_REPLY_FIELD_LENGTH),
     conversationComplete,
   };
+  if (hasAudio) {
+    const transcript = normalizeText(userTranscript, MAX_TRANSCRIPT_LENGTH);
+    const transcriptPinyin = normalizeText(userTranscriptPinyin, MAX_TRANSCRIPT_LENGTH);
+    if (transcript) reply.userTranscript = transcript;
+    if (transcript && transcriptPinyin) reply.userTranscriptPinyin = transcriptPinyin;
+  }
+  return reply;
+}
+
+/** Validates inputAudio like /api/transcribe-audio: base64 WAV, capped. */
+function parseInputAudio(value: unknown): { data: string } | "invalid" | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return "invalid";
+  const { data, format } = value;
+  if (
+    typeof data !== "string" ||
+    data.length === 0 ||
+    data.length > MAX_AUDIO_BASE64_LENGTH ||
+    !BASE64_RE.test(data) ||
+    format !== "wav"
+  ) {
+    return "invalid";
+  }
+  return { data };
 }
 
 export async function POST(request: Request) {
   const match = request.headers.get("authorization")?.match(/^Bearer\s+(\S+)$/i);
   if (!match) return json({ error: "Unauthorized" }, 401);
 
-  // Cheap rejection from the header before any other work.
+  // Cheap rejection from the header before any other work. Whether audio is present (and so which
+  // limit applies) is only known after parsing, so the header is checked against the larger one.
   const declaredLength = Number(request.headers.get("content-length"));
-  if (declaredLength > MAX_BODY_BYTES) return json({ error: "Request too large" }, 413);
+  if (declaredLength > MAX_BODY_BYTES_WITH_AUDIO) return json({ error: "Request too large" }, 413);
 
   let userId: string;
   try {
@@ -182,9 +231,8 @@ export async function POST(request: Request) {
   } catch {
     return json({ error: "Invalid body" }, 400);
   }
-  if (Buffer.byteLength(raw, "utf8") > MAX_BODY_BYTES) {
-    return json({ error: "Request too large" }, 413);
-  }
+  const bodyBytes = Buffer.byteLength(raw, "utf8");
+  if (bodyBytes > MAX_BODY_BYTES_WITH_AUDIO) return json({ error: "Request too large" }, 413);
 
   let body: unknown;
   try {
@@ -193,6 +241,14 @@ export async function POST(request: Request) {
     return json({ error: "Invalid JSON" }, 400);
   }
   if (!isRecord(body)) return json({ error: "Invalid body" }, 400);
+
+  const inputAudio = parseInputAudio(body.inputAudio);
+  if (inputAudio === "invalid") {
+    return json({ error: 'Expected inputAudio { data: base64 string, format: "wav" }' }, 400);
+  }
+  const hasAudio = inputAudio !== null;
+  // The larger limit is only for requests that actually carry audio.
+  if (!hasAudio && bodyBytes > MAX_BODY_BYTES) return json({ error: "Request too large" }, 413);
 
   // Resolve the scenario on the server. Presets come from our course data only.
   let scenario: PromptScenario | null;
@@ -207,9 +263,21 @@ export async function POST(request: Request) {
     if (!scenario) return json({ error: "Expected scenarioId or customScenario" }, 400);
   }
 
+  // With audio, the audio is the user's turn, so the history may end with the assistant.
   const messages = parseMessages(body.messages);
-  if (messages.length === 0 || messages[messages.length - 1].role !== "user") {
+  if (!hasAudio && (messages.length === 0 || messages[messages.length - 1].role !== "user")) {
     return json({ error: "The last message must be from the user" }, 400);
+  }
+
+  const contents = toGeminiContents(messages);
+  if (inputAudio) {
+    const audioParts = [
+      { text: AUDIO_INSTRUCTION },
+      { inline_data: { mime_type: "audio/wav", data: inputAudio.data } },
+    ];
+    const last = contents[contents.length - 1];
+    if (last?.role === "user") last.parts.push(...audioParts);
+    else contents.push({ role: "user", parts: audioParts });
   }
 
   // Only free presets skip the premium check; custom scenarios always need premium.
@@ -225,10 +293,10 @@ export async function POST(request: Request) {
   let output: string;
   try {
     output = await generateContent({
-      systemInstruction: buildSystemPrompt(scenario),
-      input: { contents: toGeminiContents(messages) },
+      systemInstruction: buildSystemPrompt(scenario, hasAudio),
+      input: { contents },
       json: true,
-      timeoutMs: TIMEOUT_MS,
+      timeoutMs: hasAudio ? AUDIO_TIMEOUT_MS : TIMEOUT_MS,
     });
   } catch (err) {
     if (err instanceof GeminiError) {
@@ -244,7 +312,7 @@ export async function POST(request: Request) {
     return json({ error: "Chat failed" }, 502);
   }
 
-  const reply = parseReply(output);
+  const reply = parseReply(output, hasAudio);
   if (!reply) {
     console.error("chat-completion: model returned an invalid reply");
     return json({ error: "Chat failed" }, 502);
