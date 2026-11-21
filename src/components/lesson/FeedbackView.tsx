@@ -86,7 +86,11 @@ export function FeedbackView({
           <div className="flex">
             <dt className="w-20 shrink-0 font-semibold text-subdued">You said:</dt>
             <dd className={`flex-1 ${isCorrect ? "text-success" : "text-danger"}`}>
-              {transcription.said.charAt(0).toUpperCase() + transcription.said.slice(1)}
+              {transcription.said ? (
+                transcription.said.charAt(0).toUpperCase() + transcription.said.slice(1)
+              ) : (
+                <span className="italic">No speech detected</span>
+              )}
             </dd>
           </div>
         </dl>
@@ -137,7 +141,7 @@ function SelfCheckView({
       <div className="mb-5 flex items-center gap-4">
         <IoMicCircle size={40} className="shrink-0 text-accent" aria-hidden />
         <div className="flex-1">
-          <h2 className="mb-1 text-xl leading-7 font-bold text-text">Pronunciation check coming soon</h2>
+          <h2 className="mb-1 text-xl leading-7 font-bold text-text">Couldn&apos;t check automatically</h2>
           <p className="text-[15px] leading-5 text-subdued">Compare yourself with the answer, then choose.</p>
         </div>
       </div>

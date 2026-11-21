@@ -24,6 +24,7 @@ export type { LessonStats } from "./LessonCompleteScreen";
 const MAX_ATTEMPTS = 3;
 /** Recording stops on its own after this long, so a forgotten mic doesn't stay open. */
 const MAX_RECORDING_MS = 15_000;
+const NO_SPEECH_MESSAGE = "No speech detected — tap the mic and try again";
 /** Matches SentenceBreakdownCard's closed strip, so content can scroll clear of it. */
 const SHEET_PEEK = 90;
 
@@ -281,15 +282,16 @@ function QuestionPlayer({
     try {
       const blob = await recording.stop();
       if (!mountedRef.current) return;
-      if (blob.size === 0) {
-        setIsLoading(false);
-        toast.error("No audio was recorded", { description: "Check your microphone and try again." });
+      const result = blob.size === 0 ? ({ status: "no_speech" } as const) : await checkPronunciation(blob, expected);
+      if (!mountedRef.current) return;
+      setIsLoading(false);
+
+      // Silence isn't an answer: no attempt used, nothing recorded in stats, just record again.
+      if (result.status === "no_speech") {
+        setMicError(NO_SPEECH_MESSAGE);
         return;
       }
 
-      const result = await checkPronunciation(blob, expected);
-      if (!mountedRef.current) return;
-      setIsLoading(false);
       setShowResult(true);
 
       if (result.status === "unavailable") {
