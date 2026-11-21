@@ -1,54 +1,40 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { IoArrowBack } from "react-icons/io5";
-import Ionicon from "@/components/Ionicon";
-import { findLesson } from "@/lib/course";
+import VocabularyIntroScreen from "@/components/lesson/VocabularyIntroScreen";
+import { findLesson, type Lesson } from "@/lib/course";
 
-// Placeholder until the practise flow is ported.
 export default function PractiseContent() {
   const router = useRouter();
   const lessonId = useSearchParams().get("lessonId");
   const lesson = lessonId ? findLesson(lessonId) : undefined;
+  const isPlayable = !!lesson && lesson.questions.length > 0;
 
-  const goBack = () => {
-    // Opened directly (no in-app history): go to the lessons tab instead of leaving the site.
-    if (window.history.length > 1) router.back();
-    else router.replace("/lessons");
-  };
+  useEffect(() => {
+    if (!isPlayable) router.replace("/lessons");
+  }, [isPlayable, router]);
+
+  if (!isPlayable) return null;
+
+  // Keyed by lesson so switching lessons via the URL restarts the whole flow.
+  return <PractiseSession key={lesson.id} lesson={lesson} />;
+}
+
+function PractiseSession({ lesson }: { lesson: Lesson }) {
+  const [isStudyingVocabulary, setIsStudyingVocabulary] = useState(true);
+  const startLesson = useCallback(() => setIsStudyingVocabulary(false), []);
 
   return (
     <div className="absolute inset-0 flex flex-col bg-white">
-      <header className="flex h-[60px] shrink-0 items-center px-5">
-        <button
-          type="button"
-          onClick={goBack}
-          aria-label="Back"
-          className="cursor-pointer text-text"
-        >
-          <IoArrowBack size={24} />
-        </button>
-      </header>
-      <main className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-        {lesson ? (
-          <>
-            <Ionicon name={lesson.icon} size={48} className="text-accent" />
-            <h1 className="text-[28px] leading-8 font-bold text-text">{lesson.title}</h1>
-            <p className="text-sm text-subdued">
-              {lesson.questions.length} questions · practice coming next
-            </p>
-          </>
-        ) : (
-          <h1 className="text-2xl font-bold text-text">Lesson not found</h1>
-        )}
-        <button
-          type="button"
-          onClick={goBack}
-          className="mt-4 cursor-pointer rounded-3xl border-2 border-border px-6 py-3 text-base font-semibold text-text"
-        >
-          Back
-        </button>
-      </main>
+      {isStudyingVocabulary ? (
+        <VocabularyIntroScreen questions={lesson.questions} onStartLesson={startLesson} />
+      ) : (
+        // Placeholder until LessonContent is ported.
+        <main className="flex flex-1 items-center justify-center px-8 text-center">
+          <p className="text-lg font-semibold text-text">Lesson questions — next step</p>
+        </main>
+      )}
     </div>
   );
 }
