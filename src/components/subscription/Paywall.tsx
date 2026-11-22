@@ -53,6 +53,11 @@ const FEATURES: Feature[] = [
   },
 ];
 
+// There are no real payments yet: Premium is a free 7-day trial during early access. The plans,
+// prices and billing toggle stay in code (src/data/plans.ts) for when payments launch; flip this
+// to true then (and bring back "Restore Purchase").
+const SHOW_PRICING = false;
+
 const textShadow = "[text-shadow:0_1px_3px_rgba(0,0,0,0.3)]";
 
 export function Paywall({
@@ -163,60 +168,75 @@ export function Paywall({
           ))}
         </ul>
 
-        <div
-          role="radiogroup"
-          aria-label="Billing cycle"
-          className="mb-5 flex rounded-xl border-[1.5px] border-white/20 bg-[rgba(26,26,46,0.6)] p-1"
-        >
-          {(["annual", "monthly"] as const).map((cycle) => {
-            const active = billingCycle === cycle;
-            return (
-              <button
-                key={cycle}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => setBillingCycle(cycle)}
-                className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg py-3 text-base font-semibold transition-colors ${
-                  active ? "bg-white text-[#1a1a2e]" : "text-white/90"
-                }`}
-              >
-                {cycle === "annual" ? "Annual" : "Monthly"}
-                {cycle === "annual" && active && ANNUAL_SAVINGS_PERCENT > 0 && (
-                  <span className="rounded-md bg-success px-2 py-1 text-[11px] font-bold text-white">
-                    Save {ANNUAL_SAVINGS_PERCENT}%
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        {SHOW_PRICING && (
+          <>
+            <div
+              role="radiogroup"
+              aria-label="Billing cycle"
+              className="mb-5 flex rounded-xl border-[1.5px] border-white/20 bg-[rgba(26,26,46,0.6)] p-1"
+            >
+              {(["annual", "monthly"] as const).map((cycle) => {
+                const active = billingCycle === cycle;
+                return (
+                  <button
+                    key={cycle}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setBillingCycle(cycle)}
+                    className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg py-3 text-base font-semibold transition-colors ${
+                      active ? "bg-white text-[#1a1a2e]" : "text-white/90"
+                    }`}
+                  >
+                    {cycle === "annual" ? "Annual" : "Monthly"}
+                    {cycle === "annual" && active && ANNUAL_SAVINGS_PERCENT > 0 && (
+                      <span className="rounded-md bg-success px-2 py-1 text-[11px] font-bold text-white">
+                        Save {ANNUAL_SAVINGS_PERCENT}%
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-        <div className="relative mb-5 rounded-3xl border-2 border-accent bg-white p-6 text-[#1a1a2e] shadow-[0_4px_8px_rgba(0,0,0,0.3)]">
-          {selectedPlan.recommended && (
-            <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-4 py-1.5 text-[11px] font-extrabold tracking-[1px] text-white shadow-[0_2px_4px_rgba(0,0,0,0.2)]">
-              BEST VALUE
-            </span>
-          )}
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <p className="text-2xl font-bold">{selectedPlan.name}</p>
-              <p className="mt-1 text-sm text-subdued">{selectedPlan.billingCycle}</p>
+            <div className="relative mb-5 rounded-3xl border-2 border-accent bg-white p-6 text-[#1a1a2e] shadow-[0_4px_8px_rgba(0,0,0,0.3)]">
+              {selectedPlan.recommended && (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-4 py-1.5 text-[11px] font-extrabold tracking-[1px] text-white shadow-[0_2px_4px_rgba(0,0,0,0.2)]">
+                  BEST VALUE
+                </span>
+              )}
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <p className="text-2xl font-bold">{selectedPlan.name}</p>
+                  <p className="mt-1 text-sm text-subdued">{selectedPlan.billingCycle}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[32px] leading-tight font-extrabold">
+                    {formatPrice(selectedPlan)}
+                  </p>
+                  <p className="text-sm text-subdued">{selectedPlan.period}</p>
+                </div>
+              </div>
+              <ul className="flex flex-col gap-3 border-t border-[#e5e7eb] pt-4">
+                {selectedPlan.features.map((feature) => (
+                  <li key={feature} className="flex items-center gap-2">
+                    <IoCheckmarkCircle size={20} className="text-success" />
+                    <span className="text-sm font-medium text-[#4b5563]">{feature}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div className="text-right">
-              <p className="text-[32px] leading-tight font-extrabold">{formatPrice(selectedPlan)}</p>
-              <p className="text-sm text-subdued">{selectedPlan.period}</p>
-            </div>
+          </>
+        )}
+
+        {!SHOW_PRICING && (
+          <div className="mb-5 rounded-3xl border-2 border-accent bg-white p-6 text-center text-[#1a1a2e] shadow-[0_4px_8px_rgba(0,0,0,0.3)]">
+            <p className="text-xl leading-snug font-bold">
+              Premium is free for 7 days during early access
+            </p>
+            <p className="mt-2 text-sm text-subdued">No payment or card needed.</p>
           </div>
-          <ul className="flex flex-col gap-3 border-t border-[#e5e7eb] pt-4">
-            {selectedPlan.features.map((feature) => (
-              <li key={feature} className="flex items-center gap-2">
-                <IoCheckmarkCircle size={20} className="text-success" />
-                <span className="text-sm font-medium text-[#4b5563]">{feature}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        )}
 
         <button
           type="button"
@@ -228,24 +248,34 @@ export function Paywall({
           {isStartingTrial ? "Starting..." : "Start my free week"}
         </button>
 
-        <p className="mb-8 text-center text-sm font-semibold">Try 7 days free. Cancel anytime.</p>
+        <p className="mb-8 text-center text-sm font-semibold">
+          Premium ends automatically after 7 days.
+        </p>
 
-        <nav aria-label="Legal" className="flex flex-wrap items-center justify-center gap-2 text-xs">
-          <button type="button" className="cursor-pointer text-white/80 underline">
-            Restore Purchase
-          </button>
-          <span className="text-white/60" aria-hidden>
-            •
-          </span>
-          <button type="button" className="cursor-pointer text-white/80 underline">
+        {/* New tab: the paywall is a global overlay that stays open across route changes. */}
+        <nav
+          aria-label="Legal"
+          className="flex flex-wrap items-center justify-center gap-2 text-xs"
+        >
+          <a
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white/80 underline"
+          >
             Terms
-          </button>
+          </a>
           <span className="text-white/60" aria-hidden>
             •
           </span>
-          <button type="button" className="cursor-pointer text-white/80 underline">
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white/80 underline"
+          >
             Privacy
-          </button>
+          </a>
         </nav>
       </div>
     </div>

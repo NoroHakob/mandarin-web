@@ -1,6 +1,7 @@
-import { readItem, writeItem } from "./storage";
+import { readUserItem, writeUserItem, type UserId } from "./storage";
 
-// Ported from reference/lib/lessonProgress.ts (AsyncStorage → localStorage, same key and shape).
+// Ported from reference/lib/lessonProgress.ts (AsyncStorage → localStorage, same shape).
+// Stored per user under `${LESSON_PROGRESS_KEY}:${userId}` (see storage.ts).
 export const LESSON_PROGRESS_KEY = "lesson_progress";
 
 export interface LessonProgress {
@@ -18,12 +19,13 @@ export function parseProgress(raw: string | null): LessonProgress {
   }
 }
 
-export function getAllProgress(): LessonProgress {
-  return parseProgress(readItem(LESSON_PROGRESS_KEY));
+export function getAllProgress(userId: UserId): LessonProgress {
+  return parseProgress(readUserItem(LESSON_PROGRESS_KEY, userId));
 }
 
-export function incrementLessonCompletion(lessonId: string): void {
-  const progress = getAllProgress();
+export function incrementLessonCompletion(userId: UserId, lessonId: string): void {
+  if (!userId) return;
+  const progress = getAllProgress(userId);
   progress[lessonId] = (progress[lessonId] || 0) + 1;
-  writeItem(LESSON_PROGRESS_KEY, JSON.stringify(progress));
+  writeUserItem(LESSON_PROGRESS_KEY, userId, JSON.stringify(progress));
 }

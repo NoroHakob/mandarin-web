@@ -1,17 +1,18 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { readItem, subscribeStorage } from "@/lib/storage";
+import { readUserItem, subscribeStorage, type UserId } from "@/lib/storage";
 
 /**
- * Raw localStorage value for `key`, re-read on mount, on window focus and after any write.
- * Returns `undefined` during SSR/hydration (not loaded yet) and `null` when the key is absent.
+ * Raw localStorage value for `key`, scoped to `userId`. Re-read on mount, on window focus, after
+ * any write and when the user changes. Returns `undefined` during SSR/hydration (not loaded yet)
+ * and `null` when the key is absent or nobody is signed in.
  * The raw string is a stable snapshot, so unchanged storage never causes re-renders.
  */
-export function useStoredValue(key: string): string | null | undefined {
+export function useStoredValue(key: string, userId: UserId): string | null | undefined {
   return useSyncExternalStore(
     subscribeStorage,
-    () => readItem(key),
+    () => readUserItem(key, userId),
     () => undefined,
   );
 }

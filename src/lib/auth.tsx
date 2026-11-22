@@ -10,7 +10,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { CUSTOM_SCENARIOS_KEY } from "./customScenarios";
+import { LESSON_PROGRESS_KEY } from "./lessonProgress";
+import { STATS_KEY } from "./speakingListeningStats";
+import { migrateLegacyItems } from "./storage";
 import { supabase } from "./supabase";
+
+/** Keys that used to be global in localStorage and are now stored per user. */
+const USER_SCOPED_STORAGE_KEYS = [LESSON_PROGRESS_KEY, STATS_KEY, CUSTOM_SCENARIOS_KEY] as const;
 
 /** Row from public.profiles (see supabase/migrations). */
 export type Profile = {
@@ -79,6 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      // Synchronous localStorage work only (no Supabase calls), so it's safe inside this callback.
+      if (newSession) migrateLegacyItems(USER_SCOPED_STORAGE_KEYS, newSession.user.id);
       setSession(newSession);
       // Don't await Supabase calls inside this callback (can deadlock the auth lock); defer instead.
       setTimeout(() => {

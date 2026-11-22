@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import type { Question } from "@/lib/course";
+import { useAuth } from "@/lib/auth";
 import { incrementLessonCompletion } from "@/lib/lessonProgress";
 import { checkPronunciation } from "@/lib/pronunciation";
 import { RecorderError, startRecording as startMicRecording, type ActiveRecording } from "@/lib/recorder";
@@ -67,6 +68,7 @@ function buildStats(questions: Question[], tally: Tally): LessonStats {
 
 export default function LessonContent({ questions, lessonId }: { questions: Question[]; lessonId: string }) {
   const router = useRouter();
+  const userId = useAuth().user?.id;
   const [index, setIndex] = useState(0);
   // Bumped by "Practise Again" so every question player remounts from scratch.
   const [round, setRound] = useState(0);
@@ -101,7 +103,7 @@ export default function LessonContent({ questions, lessonId }: { questions: Ques
         onContinue={() => {
           if (isContinuing) return;
           setIsContinuing(true);
-          incrementLessonCompletion(lessonId);
+          incrementLessonCompletion(userId, lessonId);
           router.replace("/lessons");
         }}
         onReview={() => {
@@ -162,6 +164,7 @@ function QuestionPlayer({
   onAnswer: (correct: boolean, attemptIndex: number) => void;
   onNext: () => void;
 }) {
+  const userId = useAuth().user?.id;
   const [isSpeechPlaying, setIsSpeechPlaying] = useState(false);
   const [hasListenedToAudio, setHasListenedToAudio] = useState(false);
   const [showMandarin, setShowMandarin] = useState(false);
@@ -245,7 +248,7 @@ function QuestionPlayer({
     if (listenedRef.current) return;
     listenedRef.current = true;
     setHasListenedToAudio(true);
-    recordQuestionListened();
+    recordQuestionListened(userId);
     // single_response has one answer, so it's selected as soon as the options appear.
     if (question.type === "single_response") setSelectedOption(question.options[0].id);
   };
@@ -304,7 +307,7 @@ function QuestionPlayer({
       setTranscription({ expected, said: result.transcript });
       setIsCorrect(result.isCorrect);
       onAnswer(result.isCorrect, attemptCount);
-      if (result.isCorrect) recordQuestionAnswered();
+      if (result.isCorrect) recordQuestionAnswered(userId);
     } catch {
       if (!mountedRef.current) return;
       setIsLoading(false);
@@ -373,7 +376,7 @@ function QuestionPlayer({
     setRecordingUrl(null);
     setIsCorrect(true);
     onAnswer(true, attemptCount);
-    recordQuestionAnswered();
+    recordQuestionAnswered(userId);
   };
 
   const handleSelfCheckTryAgain = () => {

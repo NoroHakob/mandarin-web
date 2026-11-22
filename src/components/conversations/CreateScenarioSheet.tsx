@@ -5,6 +5,7 @@ import type { IconType } from "react-icons";
 import { IoChevronBack, IoHappyOutline, IoImageOutline, IoPersonOutline } from "react-icons/io5";
 import { toast } from "sonner";
 import { usePaywall } from "@/components/subscription/PaywallProvider";
+import { useAuth } from "@/lib/auth";
 import type { ConversationScenario } from "@/lib/course";
 import {
   CUSTOM_SCENARIO_ICON,
@@ -122,6 +123,7 @@ export default function CreateScenarioSheet({
   onCreated: (scenario: ConversationScenario) => void;
 }) {
   const { openPaywall } = usePaywall();
+  const userId = useAuth().user?.id;
   const [myRole, setMyRole] = useState("");
   const [aiRole, setAiRole] = useState("");
   const [scene, setScene] = useState("");
@@ -171,7 +173,7 @@ export default function CreateScenarioSheet({
         openPaywall,
       );
       if (controller.signal.aborted) return;
-      saveCustomScenario(scenario);
+      saveCustomScenario(userId, scenario);
       onCreated(scenario);
     } catch (err) {
       if (controller.signal.aborted || err instanceof HandledError) return;

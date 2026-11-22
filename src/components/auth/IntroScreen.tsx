@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { FaApple, FaGoogle } from "react-icons/fa";
 import { MdOutlineEmail } from "react-icons/md";
@@ -124,7 +125,11 @@ export default function IntroScreen() {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          // Always show Google's account chooser, so users can switch accounts after signing out.
+          queryParams: { prompt: "select_account" },
+        },
       });
       if (error) throw error;
       // On success the browser navigates away; keep the spinner up until it does.
@@ -237,6 +242,18 @@ export default function IntroScreen() {
                   Continue with Email
                 </LoginButton>
               </div>
+
+              <p className="mt-4 text-center text-xs leading-4 text-white/60">
+                By continuing you agree to our{" "}
+                <Link href="/terms" className="text-white/85 underline">
+                  Terms
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" className="text-white/85 underline">
+                  Privacy Policy
+                </Link>
+                .
+              </p>
             </div>
           ) : (
             <EmailAuth onBack={() => switchView("login")} />

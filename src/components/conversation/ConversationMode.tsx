@@ -12,6 +12,7 @@ import {
 } from "react-icons/io5";
 import { toast } from "sonner";
 import { usePaywall } from "@/components/subscription/PaywallProvider";
+import { useAuth } from "@/lib/auth";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { prepareSpeechWav } from "@/lib/audio";
 import type { ConversationScenario } from "@/lib/course";
@@ -265,6 +266,7 @@ export default function ConversationMode({
   onExit: () => void;
 }) {
   const { openPaywall } = usePaywall();
+  const userId = useAuth().user?.id;
   const [messages, setMessages] = useState<Message[]>([GREETING]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -399,7 +401,7 @@ export default function ConversationMode({
           english: reply.english,
         },
       ]);
-      recordConversationTurn();
+      recordConversationTurn(userId);
 
       if (reply.conversationComplete) {
         completeTimerRef.current = setTimeout(() => setIsComplete(true), COMPLETE_DELAY_MS);

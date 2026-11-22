@@ -5,8 +5,8 @@ import { useEffect, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth";
 import IntroScreen from "./IntroScreen";
 
-/** Routes that must render without a session (e.g. finishing the magic-link sign-in). */
-const PUBLIC_PATHS = ["/auth/callback"];
+/** Routes that must render without a session (finishing sign-in, legal pages). */
+const PUBLIC_PATHS = ["/auth/callback", "/privacy", "/terms"];
 const ONBOARDING_PATH = "/onboarding";
 
 function Spinner() {

@@ -21,7 +21,8 @@ function useScenario(
   scenarioId: string | null,
   customScenarioId: string | null,
 ): ConversationScenario | null | undefined {
-  const rawCustom = useStoredValue(CUSTOM_SCENARIOS_KEY);
+  const userId = useAuth().user?.id;
+  const rawCustom = useStoredValue(CUSTOM_SCENARIOS_KEY, userId);
   return useMemo(() => {
     if (scenarioId) return findScenario(scenarioId) ?? null;
     if (!customScenarioId) return null;

@@ -1,6 +1,7 @@
-import { readItem, writeItem } from "./storage";
+import { readUserItem, writeUserItem, type UserId } from "./storage";
 
-// Ported from reference/lib/speakingListeningStats.ts (AsyncStorage → localStorage, same key and shape).
+// Ported from reference/lib/speakingListeningStats.ts (AsyncStorage → localStorage, same shape).
+// Stored per user under `${STATS_KEY}:${userId}` (see storage.ts).
 export const STATS_KEY = "speaking_listening_stats";
 
 const MINUTES_PER_QUESTION = 0.5;
@@ -43,35 +44,38 @@ export function parseStats(raw: string | null): SpeakingListeningStats {
   }
 }
 
-const readStats = () => parseStats(readItem(STATS_KEY));
+const readStats = (userId: UserId) => parseStats(readUserItem(STATS_KEY, userId));
 
-const writeStats = (stats: SpeakingListeningStats) => {
-  writeItem(STATS_KEY, JSON.stringify(stats));
+const writeStats = (userId: UserId, stats: SpeakingListeningStats) => {
+  writeUserItem(STATS_KEY, userId, JSON.stringify(stats));
 };
 
-export function recordQuestionAnswered(): void {
-  const stats = readStats();
+export function recordQuestionAnswered(userId: UserId): void {
+  if (!userId) return;
+  const stats = readStats(userId);
   stats.questionsAnswered += 1;
   stats.minutesSpoken = stats.questionsAnswered * MINUTES_PER_QUESTION;
   stats.lastUpdate = new Date().toISOString();
-  writeStats(stats);
+  writeStats(userId, stats);
 }
 
-export function recordQuestionListened(): void {
-  const stats = readStats();
+export function recordQuestionListened(userId: UserId): void {
+  if (!userId) return;
+  const stats = readStats(userId);
   stats.questionsListened += 1;
   stats.minutesListened = stats.questionsListened * MINUTES_PER_QUESTION;
   stats.lastUpdate = new Date().toISOString();
-  writeStats(stats);
+  writeStats(userId, stats);
 }
 
-export function recordConversationTurn(): void {
-  const stats = readStats();
+export function recordConversationTurn(userId: UserId): void {
+  if (!userId) return;
+  const stats = readStats(userId);
   stats.conversationTurns += 1;
   stats.minutesSpoken += MINUTES_PER_CONVERSATION_TURN;
   stats.minutesListened += MINUTES_PER_CONVERSATION_TURN;
   stats.lastUpdate = new Date().toISOString();
-  writeStats(stats);
+  writeStats(userId, stats);
 }
 
 export function toWeeklyStats(stats: SpeakingListeningStats): WeeklyStats {
@@ -85,6 +89,6 @@ export function toWeeklyStats(stats: SpeakingListeningStats): WeeklyStats {
   };
 }
 
-export function getWeeklyStats(): WeeklyStats {
-  return toWeeklyStats(readStats());
+export function getWeeklyStats(userId: UserId): WeeklyStats {
+  return toWeeklyStats(readStats(userId));
 }

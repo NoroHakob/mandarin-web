@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import type { IconType } from "react-icons";
 import {
@@ -130,7 +131,9 @@ export default function ProfilePage() {
         {/* Settings */}
         <section className="mb-6">
           <h2 className="mb-3 text-sm font-bold text-[#8e8e93] uppercase">Settings</h2>
-          <div className={`overflow-hidden rounded-3xl border-2 border-border bg-white ${cardShadow}`}>
+          <div
+            className={`overflow-hidden rounded-3xl border-2 border-border bg-white ${cardShadow}`}
+          >
             <MenuItem icon={IoSettingsOutline} title="App Settings" />
             <MenuItem icon={IoHelpCircleOutline} title="Help & Support" last />
           </div>
@@ -145,6 +148,19 @@ export default function ProfilePage() {
           <IoLogOutOutline size={20} aria-hidden />
           {signingOut ? "Signing out..." : "Sign Out"}
         </button>
+
+        <nav
+          aria-label="Legal"
+          className="mt-6 flex items-center justify-center gap-2 text-xs text-subdued"
+        >
+          <Link href="/terms" className="underline">
+            Terms of Use
+          </Link>
+          <span aria-hidden>•</span>
+          <Link href="/privacy" className="underline">
+            Privacy Policy
+          </Link>
+        </nav>
       </main>
     </div>
   );

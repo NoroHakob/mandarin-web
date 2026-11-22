@@ -1,8 +1,9 @@
 import type { IoniconName } from "@/components/Ionicon";
 import type { ConversationScenario, PhrasebookEntry } from "./course";
-import { readItem, writeItem } from "./storage";
+import { readUserItem, writeUserItem, type UserId } from "./storage";
 
-// Ported from reference/lib/customScenarios.ts (AsyncStorage → localStorage, same key and shape).
+// Ported from reference/lib/customScenarios.ts (AsyncStorage → localStorage, same shape).
+// Stored per user under `${CUSTOM_SCENARIOS_KEY}:${userId}` (see storage.ts).
 export const CUSTOM_SCENARIOS_KEY = "custom_scenarios";
 
 export const CUSTOM_SCENARIO_ID_PREFIX = "custom_";
@@ -90,26 +91,28 @@ export function sortCustomScenarios(store: StorageType): ConversationScenario[] 
     .map((x) => x.scenario);
 }
 
-const readStorage = (): StorageType => parseCustomScenarios(readItem(CUSTOM_SCENARIOS_KEY));
+const readStorage = (userId: UserId): StorageType =>
+  parseCustomScenarios(readUserItem(CUSTOM_SCENARIOS_KEY, userId));
 
-const writeStorage = (data: StorageType) => {
-  writeItem(CUSTOM_SCENARIOS_KEY, JSON.stringify(data));
+const writeStorage = (userId: UserId, data: StorageType) => {
+  writeUserItem(CUSTOM_SCENARIOS_KEY, userId, JSON.stringify(data));
 };
 
 export const createCustomScenarioId = () => `${CUSTOM_SCENARIO_ID_PREFIX}${crypto.randomUUID()}`;
 
 export const isCustomScenarioId = (id: string) => id.startsWith(CUSTOM_SCENARIO_ID_PREFIX);
 
-export function saveCustomScenario(scenario: ConversationScenario): void {
-  const store = readStorage();
+export function saveCustomScenario(userId: UserId, scenario: ConversationScenario): void {
+  if (!userId) return;
+  const store = readStorage(userId);
   store[scenario.id] = { scenario, createdAt: new Date().toISOString() };
-  writeStorage(store);
+  writeStorage(userId, store);
 }
 
-export function getCustomScenario(id: string): ConversationScenario | null {
-  return readStorage()[id]?.scenario ?? null;
+export function getCustomScenario(userId: UserId, id: string): ConversationScenario | null {
+  return readStorage(userId)[id]?.scenario ?? null;
 }
 
-export function listCustomScenarios(): ConversationScenario[] {
-  return sortCustomScenarios(readStorage());
+export function listCustomScenarios(userId: UserId): ConversationScenario[] {
+  return sortCustomScenarios(readStorage(userId));
 }
