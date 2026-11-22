@@ -31,7 +31,7 @@ export default function LegalPage({
           type="button"
           onClick={goBack}
           aria-label="Back"
-          className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full"
+          className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full"
         >
           <IoChevronBack size={24} />
         </button>

@@ -43,6 +43,17 @@ export function writeUserItem(key: string, userId: UserId, value: string): void 
   if (userId) writeItem(userScopedKey(key, userId), value);
 }
 
+/** Removes `key` for this user. Signed out → nothing happens. */
+export function removeUserItem(key: string, userId: UserId): void {
+  if (!userId || typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(userScopedKey(key, userId));
+  } catch {
+    // Storage unavailable; nothing to remove.
+  }
+  notifyStorageChange();
+}
+
 /**
  * One-time move of data saved under the old global (unscoped) keys to `userId`: the first user
  * to sign in on this browser after the switch to per-user keys. The legacy value is copied only if

@@ -155,7 +155,7 @@ export default function ProfilePage() {
           <div
             className={`overflow-hidden rounded-3xl border-2 border-border bg-white ${cardShadow}`}
           >
-            <MenuItem icon={IoSettingsOutline} title="App Settings" />
+            <MenuItem icon={IoSettingsOutline} title="App Settings" href="/settings" />
             <MenuItem icon={IoHelpCircleOutline} title="Help & Support" href="/help" last />
           </div>
         </section>

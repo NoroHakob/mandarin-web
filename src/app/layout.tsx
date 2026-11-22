@@ -3,6 +3,7 @@ import "@fontsource/eb-garamond/500-italic.css";
 import "./globals.css";
 import { Toaster } from "sonner";
 import AppGate from "@/components/auth/AppGate";
+import VoicePreferenceSync from "@/components/VoicePreferenceSync";
 import { PaywallProvider } from "@/components/subscription/PaywallProvider";
 import { AuthProvider } from "@/lib/auth";
 
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <div className="app-column">
           <AuthProvider>
+            <VoicePreferenceSync />
             <PaywallProvider>
               <AppGate>{children}</AppGate>
             </PaywallProvider>

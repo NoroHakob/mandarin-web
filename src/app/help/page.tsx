@@ -55,10 +55,15 @@ export default function HelpPage() {
 
         <Faq question="There's no Chinese voice, or the voice sounds different">
           <p>
-            Chinese audio is read aloud by your device&apos;s built-in speech voices. Convo picks a
-            Mandarin (Chinese, China) voice automatically, so how it sounds depends on the voices
-            your device has. If none is installed you&apos;ll see &ldquo;No Chinese voice
+            Chinese audio is read aloud by your device&apos;s built-in speech voices, so it can
+            sound different on your phone and your computer. Convo picks a natural-sounding Mandarin
+            voice automatically. If none is installed you&apos;ll see &ldquo;No Chinese voice
             found&rdquo;.
+          </p>
+          <p>
+            To choose a different voice and hear a sample, go to{" "}
+            <Link href="/settings">Profile → App Settings → Voice</Link>. The list shows the
+            Chinese voices on the device you&apos;re using. To get more voices:
           </p>
           <ul>
             <li>

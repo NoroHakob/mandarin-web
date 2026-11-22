@@ -2,15 +2,21 @@ import { toast } from "sonner";
 
 /**
  * Mandarin text-to-speech on top of window.speechSynthesis (the web stand-in for expo-speech).
- * Always speaks with lang "zh-CN"; picks a Chinese voice when the OS has one, and warns once
- * per session when it doesn't.
+ * Always speaks with lang "zh-CN". Voice choice: the user's saved preference (App Settings → Voice)
+ * when this device has it, otherwise the best Mandarin voice, favouring natural/female ones. Warns
+ * once per session when the OS has no Chinese voice at all.
  */
+
+/** Per-user localStorage key holding the preferred voice's voiceURI (absent = automatic). */
+export const TTS_VOICE_KEY = "tts_voice";
 
 const LANG = "zh-CN";
 const VOICES_TIMEOUT_MS = 2000;
 const NO_VOICE_MESSAGE = "No Chinese voice found — install a Chinese voice in your OS for audio";
 
 export interface SpeakCallbacks {
+  /** Voice to use, by voiceURI. `null` = automatic; omitted = the user's saved preference. */
+  voiceURI?: string | null;
   onStart?: () => void;
   /** The utterance played to the end. */
   onEnd?: () => void;
@@ -35,6 +41,13 @@ interface ActiveUtterance {
 let active: ActiveUtterance | null = null;
 let pendingVoices: Promise<SpeechSynthesisVoice[]> | null = null;
 let warnedNoChineseVoice = false;
+// Signed-in user's saved voiceURI, pushed in by VoicePreferenceSync. null = automatic.
+let preferredVoiceURI: string | null = null;
+
+/** Sets the voice used by speak() when the caller doesn't pass one. null = automatic. */
+export function setPreferredVoice(voiceURI: string | null): void {
+  preferredVoiceURI = voiceURI || null;
+}
 
 function getSynth(): SpeechSynthesis | null {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
@@ -71,20 +84,66 @@ function normalizeLang(lang: string) {
   return lang.replace(/_/g, "-").toLowerCase();
 }
 
-/** Best Mandarin voice: zh-CN first, then other Mandarin locales. Cantonese (zh-HK, yue) is skipped. */
-function pickChineseVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
-  const ranked: Array<(lang: string) => boolean> = [
-    (l) => l === "zh-cn",
-    (l) => l.startsWith("cmn"),
-    (l) => l === "zh-sg" || l === "zh-hans" || l.startsWith("zh-hans-"),
-    (l) => l === "zh-tw" || l === "zh-hant" || l.startsWith("zh-hant-tw"),
-    (l) => l === "zh",
-  ];
-  for (const matches of ranked) {
-    const voice = voices.find((v) => matches(normalizeLang(v.lang)));
-    if (voice) return voice;
-  }
-  return undefined;
+/** Mandarin locales, best first. Cantonese (zh-HK, yue) matches none of them. */
+const MANDARIN_LANG_RANK: Array<(lang: string) => boolean> = [
+  (l) => l === "zh-cn",
+  (l) => l.startsWith("cmn"),
+  (l) => l === "zh-sg" || l === "zh-hans" || l.startsWith("zh-hans-"),
+  (l) => l === "zh-tw" || l === "zh-hant" || l.startsWith("zh-hant-tw"),
+  (l) => l === "zh",
+];
+
+function mandarinRank(voice: SpeechSynthesisVoice): number {
+  const lang = normalizeLang(voice.lang);
+  return MANDARIN_LANG_RANK.findIndex((matches) => matches(lang));
+}
+
+/**
+ * Names of voices that are usually female or natural-sounding (Apple, Microsoft, Google). Phones
+ * otherwise often default to a robotic or male voice.
+ */
+const PREFERRED_VOICE_NAME =
+  /tingting|ting-ting|xiaoxiao|xiaoyi|meijia|mei-jia|lili|huihui|yaoyao|google\s*普通话|\bfemale\b/i;
+
+/**
+ * The device's Mandarin voices, best locale first (zh-CN, then other Mandarin locales; Cantonese is
+ * left out). Voices load asynchronously, so this can be empty at first: see loadChineseVoices().
+ */
+export function listChineseVoices(
+  voices: SpeechSynthesisVoice[] = getSynth()?.getVoices() ?? [],
+): SpeechSynthesisVoice[] {
+  return voices
+    .map((voice) => ({ voice, rank: mandarinRank(voice) }))
+    .filter(({ rank }) => rank >= 0)
+    .sort((a, b) => a.rank - b.rank) // Stable: keeps the browser's order within a locale.
+    .map(({ voice }) => voice);
+}
+
+/** listChineseVoices() once the browser has loaded its voices (or given up after a timeout). */
+export async function loadChineseVoices(): Promise<SpeechSynthesisVoice[]> {
+  const synth = getSynth();
+  return synth ? listChineseVoices(await loadVoices(synth)) : [];
+}
+
+/** Calls `callback` when the browser's voice list changes; returns the unsubscribe function. */
+export function subscribeVoices(callback: () => void): () => void {
+  const synth = getSynth();
+  if (!synth) return () => {};
+  synth.addEventListener("voiceschanged", callback);
+  return () => synth.removeEventListener("voiceschanged", callback);
+}
+
+/** Chosen voice if this device has it; else a likely female/natural Mandarin voice; else the best locale. */
+function pickChineseVoice(
+  voices: SpeechSynthesisVoice[],
+  voiceURI: string | null,
+): SpeechSynthesisVoice | undefined {
+  const mandarin = listChineseVoices(voices);
+  return (
+    (voiceURI ? mandarin.find((v) => v.voiceURI === voiceURI) : undefined) ??
+    mandarin.find((v) => PREFERRED_VOICE_NAME.test(v.name)) ??
+    mandarin[0]
+  );
 }
 
 function warnNoChineseVoice() {
@@ -129,7 +188,8 @@ export function speak(text: string, callbacks: SpeakCallbacks = {}): SpeakHandle
       settle("stop");
       return;
     }
-    const voice = pickChineseVoice(voices);
+    const voiceURI = callbacks.voiceURI === undefined ? preferredVoiceURI : callbacks.voiceURI;
+    const voice = pickChineseVoice(voices, voiceURI);
     if (voice) utterance.voice = voice;
     else warnNoChineseVoice(); // Still try: lang alone may reach a usable voice.
 
