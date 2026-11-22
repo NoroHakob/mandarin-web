@@ -5,6 +5,7 @@ import { IoStopCircleOutline, IoVolumeHighOutline } from "react-icons/io5";
 import { useStoredValue } from "@/hooks/useStoredValue";
 import { useAuth } from "@/lib/auth";
 import {
+  findChineseVoice,
   isSpeechSupported,
   loadChineseVoices,
   speak,
@@ -98,9 +99,11 @@ export default function VoiceSettings() {
   useEffect(() => () => speechRef.current?.cancel(), []);
 
   // The preference is per account but voices are per device: a voice saved on another device
-  // falls back to automatic here (and is kept for when the user is back on that device).
-  const savedAvailable = !!saved && !!voices?.some((v) => v.voiceURI === saved);
-  const selected = savedAvailable ? saved : AUTOMATIC;
+  // falls back to automatic here (and is kept for when the user is back on that device). A saved
+  // duplicate that the list dropped maps to the kept voice with the same name + locale.
+  const savedVoice = saved && voices ? findChineseVoice(saved) : undefined;
+  const savedAvailable = !!savedVoice;
+  const selected = savedVoice?.voiceURI ?? AUTOMATIC;
 
   const select = (value: string) => {
     stopSpeech();
@@ -165,7 +168,7 @@ export default function VoiceSettings() {
                 value={voice.voiceURI}
                 checked={selected === voice.voiceURI}
                 onSelect={select}
-                label={voice.name}
+                label={voice.localService ? voice.name : `${voice.name} (online)`}
                 detail={voice.lang}
               />
             ))}

@@ -105,18 +105,51 @@ function mandarinRank(voice: SpeechSynthesisVoice): number {
 const PREFERRED_VOICE_NAME =
   /tingting|ting-ting|xiaoxiao|xiaoyi|meijia|mei-jia|lili|huihui|yaoyao|google\s*普通话|\bfemale\b/i;
 
-/**
- * The device's Mandarin voices, best locale first (zh-CN, then other Mandarin locales; Cantonese is
- * left out). Voices load asynchronously, so this can be empty at first: see loadChineseVoices().
- */
-export function listChineseVoices(
-  voices: SpeechSynthesisVoice[] = getSynth()?.getVoices() ?? [],
-): SpeechSynthesisVoice[] {
+/** Voices with the same name + locale are the same voice to the user (Android lists some twice). */
+function voiceKey(voice: SpeechSynthesisVoice): string {
+  return `${voice.name}|${normalizeLang(voice.lang)}`;
+}
+
+function rankedMandarinVoices(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
   return voices
     .map((voice) => ({ voice, rank: mandarinRank(voice) }))
     .filter(({ rank }) => rank >= 0)
     .sort((a, b) => a.rank - b.rank) // Stable: keeps the browser's order within a locale.
     .map(({ voice }) => voice);
+}
+
+/**
+ * The device's Mandarin voices, best locale first (zh-CN, then other Mandarin locales; Cantonese is
+ * left out), one per name + locale: an offline (localService) copy wins, else the first one.
+ * Voices load asynchronously, so this can be empty at first: see loadChineseVoices().
+ */
+export function listChineseVoices(
+  voices: SpeechSynthesisVoice[] = getSynth()?.getVoices() ?? [],
+): SpeechSynthesisVoice[] {
+  const kept = new Map<string, SpeechSynthesisVoice>(); // Insertion order = ranking order.
+  for (const voice of rankedMandarinVoices(voices)) {
+    const key = voiceKey(voice);
+    const current = kept.get(key);
+    if (!current || (!current.localService && voice.localService)) kept.set(key, voice);
+  }
+  return [...kept.values()];
+}
+
+/**
+ * The listed (de-duplicated) Mandarin voice for a saved voiceURI. A URI that belongs to a dropped
+ * duplicate resolves to the kept voice with the same name + locale, so older choices keep working.
+ */
+export function findChineseVoice(
+  voiceURI: string,
+  voices: SpeechSynthesisVoice[] = getSynth()?.getVoices() ?? [],
+): SpeechSynthesisVoice | undefined {
+  const listed = listChineseVoices(voices);
+  const exact = listed.find((v) => v.voiceURI === voiceURI);
+  if (exact) return exact;
+  const original = voices.find((v) => v.voiceURI === voiceURI);
+  if (!original) return undefined;
+  const key = voiceKey(original);
+  return listed.find((v) => voiceKey(v) === key);
 }
 
 /** listChineseVoices() once the browser has loaded its voices (or given up after a timeout). */
@@ -140,7 +173,7 @@ function pickChineseVoice(
 ): SpeechSynthesisVoice | undefined {
   const mandarin = listChineseVoices(voices);
   return (
-    (voiceURI ? mandarin.find((v) => v.voiceURI === voiceURI) : undefined) ??
+    (voiceURI ? findChineseVoice(voiceURI, voices) : undefined) ??
     mandarin.find((v) => PREFERRED_VOICE_NAME.test(v.name)) ??
     mandarin[0]
   );
