@@ -18,20 +18,41 @@ import { useAuth } from "@/lib/auth";
 
 const cardShadow = "shadow-[0_2px_8px_rgba(0,0,0,0.08)]";
 
-function MenuItem({ icon: Icon, title, last }: { icon: IconType; title: string; last?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={() => toast("Coming soon")}
-      className={`flex w-full cursor-pointer items-center justify-between px-5 py-4 text-left ${
-        last ? "" : "border-b-[0.5px] border-[#bababe]"
-      }`}
-    >
+function MenuItem({
+  icon: Icon,
+  title,
+  href,
+  last,
+}: {
+  icon: IconType;
+  title: string;
+  /** Page to open; items without one aren't built yet. */
+  href?: string;
+  last?: boolean;
+}) {
+  const className = `flex w-full cursor-pointer items-center justify-between px-5 py-4 text-left ${
+    last ? "" : "border-b-[0.5px] border-[#bababe]"
+  }`;
+  const content = (
+    <>
       <span className="flex flex-1 items-center gap-4">
         <Icon size={24} className="text-subdued" aria-hidden />
         <span className="text-base font-semibold text-text">{title}</span>
       </span>
       <IoChevronForward size={20} className="text-subdued" aria-hidden />
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={() => toast("Coming soon")} className={className}>
+      {content}
     </button>
   );
 }
@@ -135,7 +156,7 @@ export default function ProfilePage() {
             className={`overflow-hidden rounded-3xl border-2 border-border bg-white ${cardShadow}`}
           >
             <MenuItem icon={IoSettingsOutline} title="App Settings" />
-            <MenuItem icon={IoHelpCircleOutline} title="Help & Support" last />
+            <MenuItem icon={IoHelpCircleOutline} title="Help & Support" href="/help" last />
           </div>
         </section>
 

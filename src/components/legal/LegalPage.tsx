@@ -5,8 +5,17 @@ import type { ReactNode } from "react";
 import { IoChevronBack } from "react-icons/io5";
 import { LEGAL_LAST_UPDATED } from "@/lib/legal";
 
-/** Scrollable, readable layout shared by /privacy and /terms. */
-export default function LegalPage({ title, children }: { title: string; children: ReactNode }) {
+/** Scrollable, readable layout shared by /privacy, /terms and /help. */
+export default function LegalPage({
+  title,
+  children,
+  lastUpdated = LEGAL_LAST_UPDATED,
+}: {
+  title: string;
+  children: ReactNode;
+  /** Shown under the header; pass null for pages that aren't legal documents. */
+  lastUpdated?: string | null;
+}) {
   const router = useRouter();
 
   // Opened from inside the app → go back there; opened directly (or in a new tab) → home.
@@ -30,7 +39,7 @@ export default function LegalPage({ title, children }: { title: string; children
       </header>
 
       <main className="min-h-0 flex-1 overflow-y-auto px-5 pt-5 pb-12 text-[15px] leading-6">
-        <p className="mb-6 text-sm text-subdued">Last updated: {LEGAL_LAST_UPDATED}</p>
+        {lastUpdated && <p className="mb-6 text-sm text-subdued">Last updated: {lastUpdated}</p>}
         <div className="flex flex-col gap-6 [&_a]:text-accent [&_a]:underline [&_h2]:mb-2 [&_h2]:text-lg [&_h2]:font-bold [&_li]:mb-1.5 [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-5">
           {children}
         </div>
