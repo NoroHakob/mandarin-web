@@ -105,39 +105,55 @@ function mandarinRank(voice: SpeechSynthesisVoice): number {
 const PREFERRED_VOICE_NAME =
   /tingting|ting-ting|xiaoxiao|xiaoyi|meijia|mei-jia|lili|huihui|yaoyao|google\s*普通话|\bfemale\b/i;
 
-/** Voices with the same name + locale are the same voice to the user (Android lists some twice). */
+/** Apple's novelty voices (iOS/macOS ship them per locale); fun, but poor for learning. */
+const NOVELTY_VOICE_NAME = /^(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley)\b/i;
+
+/**
+ * Voices with the same name are the same voice to the user: Android lists some twice, and iOS
+ * repeats e.g. "Grandpa" once per Chinese locale.
+ */
 function voiceKey(voice: SpeechSynthesisVoice): string {
-  return `${voice.name}|${normalizeLang(voice.lang)}`;
+  return voice.name.trim();
 }
 
-function rankedMandarinVoices(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
-  return voices
-    .map((voice) => ({ voice, rank: mandarinRank(voice) }))
-    .filter(({ rank }) => rank >= 0)
-    .sort((a, b) => a.rank - b.rank) // Stable: keeps the browser's order within a locale.
-    .map(({ voice }) => voice);
+/** 0 = likely natural, 1 = regular, 2 = novelty. */
+function nameTier(voice: SpeechSynthesisVoice): number {
+  if (NOVELTY_VOICE_NAME.test(voice.name)) return 2;
+  return PREFERRED_VOICE_NAME.test(voice.name) ? 0 : 1;
 }
 
 /**
- * The device's Mandarin voices, best locale first (zh-CN, then other Mandarin locales; Cantonese is
- * left out), one per name + locale: an offline (localService) copy wins, else the first one.
- * Voices load asynchronously, so this can be empty at first: see loadChineseVoices().
+ * The device's Mandarin voices (Cantonese is left out), one per name. For each name the best locale
+ * wins (zh-CN, then other Mandarin locales), and within a locale an offline (localService) copy.
+ * Order: likely natural voices first, then others, Apple's novelty voices last; best locale first
+ * within each group. Voices load asynchronously, so this can be empty at first: see
+ * loadChineseVoices().
  */
 export function listChineseVoices(
   voices: SpeechSynthesisVoice[] = getSynth()?.getVoices() ?? [],
 ): SpeechSynthesisVoice[] {
-  const kept = new Map<string, SpeechSynthesisVoice>(); // Insertion order = ranking order.
-  for (const voice of rankedMandarinVoices(voices)) {
-    const key = voiceKey(voice);
+  const ranked = voices
+    .map((voice) => ({ voice, rank: mandarinRank(voice) }))
+    .filter(({ rank }) => rank >= 0)
+    .sort((a, b) => a.rank - b.rank); // Stable: keeps the browser's order within a locale.
+
+  const kept = new Map<string, { voice: SpeechSynthesisVoice; rank: number }>();
+  for (const entry of ranked) {
+    const key = voiceKey(entry.voice);
     const current = kept.get(key);
-    if (!current || (!current.localService && voice.localService)) kept.set(key, voice);
+    const betterCopy =
+      current?.rank === entry.rank && !current.voice.localService && entry.voice.localService;
+    if (!current || betterCopy) kept.set(key, entry);
   }
-  return [...kept.values()];
+
+  return [...kept.values()] // Insertion order = locale ranking; sort is stable.
+    .sort((a, b) => nameTier(a.voice) - nameTier(b.voice) || a.rank - b.rank)
+    .map(({ voice }) => voice);
 }
 
 /**
  * The listed (de-duplicated) Mandarin voice for a saved voiceURI. A URI that belongs to a dropped
- * duplicate resolves to the kept voice with the same name + locale, so older choices keep working.
+ * duplicate resolves to the kept voice with the same name, so older choices keep working.
  */
 export function findChineseVoice(
   voiceURI: string,
@@ -166,16 +182,15 @@ export function subscribeVoices(callback: () => void): () => void {
   return () => synth.removeEventListener("voiceschanged", callback);
 }
 
-/** Chosen voice if this device has it; else a likely female/natural Mandarin voice; else the best locale. */
+/** Chosen voice if this device has it; else the top of listChineseVoices() (natural first, novelty last). */
 function pickChineseVoice(
   voices: SpeechSynthesisVoice[],
   voiceURI: string | null,
 ): SpeechSynthesisVoice | undefined {
-  const mandarin = listChineseVoices(voices);
   return (
     (voiceURI ? findChineseVoice(voiceURI, voices) : undefined) ??
-    mandarin.find((v) => PREFERRED_VOICE_NAME.test(v.name)) ??
-    mandarin[0]
+    // The list is already ordered natural voices first, novelty voices last.
+    listChineseVoices(voices)[0]
   );
 }
 
