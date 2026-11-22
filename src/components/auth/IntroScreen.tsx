@@ -5,12 +5,17 @@ import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { FaApple, FaGoogle } from "react-icons/fa";
 import { MdOutlineEmail } from "react-icons/md";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 import EmailAuth from "./EmailAuth";
 
 const MENU_HEIGHT = 250;
 const PEEK_MENU_HEIGHT = 50;
 const CLOSED_POSITION = MENU_HEIGHT - PEEK_MENU_HEIGHT;
 const SWIPE_THRESHOLD = 50;
+
+// Apple sign-in needs an Apple Developer account, which we don't have yet. Flip to true once
+// the Apple provider is configured in Supabase (and wire it like Google below).
+const SHOW_APPLE_SIGN_IN = false;
 
 const SCRIPT_PHRASES = ["Speaking", "Listening", "Practising", "Conversing"];
 
@@ -30,6 +35,7 @@ export default function IntroScreen() {
 
   const [view, setView] = useState<View>("login");
   const [contentVisible, setContentVisible] = useState(true);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   // Hero text intro + phrase cycle (same timing as the reference):
   // every 3.5s fade out (0.5s), swap word, pause 0.15s, fade in.
@@ -54,6 +60,16 @@ export default function IntroScreen() {
       timers.forEach(clearTimeout);
       clearInterval(interval);
     };
+  }, []);
+
+  // If the user comes back from Google with the browser's Back button, the page may be
+  // restored from the back/forward cache with the button still disabled.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setGoogleLoading(false);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
   const switchView = (to: View) => {
@@ -99,6 +115,24 @@ export default function IntroScreen() {
     dragOffset === null ? baseY : Math.min(CLOSED_POSITION, Math.max(0, baseY + dragOffset));
 
   const comingSoon = () => toast("Coming soon");
+
+  // Redirects the whole page to Google. With PKCE, Supabase sends the user back to
+  // /auth/callback?code=…, which AuthCallback exchanges exactly like a magic link.
+  const signInWithGoogle = async () => {
+    if (googleLoading) return;
+    setGoogleLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) throw error;
+      // On success the browser navigates away; keep the spinner up until it does.
+    } catch {
+      setGoogleLoading(false);
+      toast.error("Couldn't start Google sign-in. Please try again.");
+    }
+  };
 
   return (
     <div className="absolute inset-0 overflow-hidden bg-black">
@@ -181,10 +215,16 @@ export default function IntroScreen() {
               </div>
 
               <div className="flex flex-col gap-4">
-                <LoginButton icon={<FaApple size={16} />} onClick={comingSoon}>
-                  Continue with Apple
-                </LoginButton>
-                <LoginButton icon={<FaGoogle size={16} />} onClick={comingSoon}>
+                {SHOW_APPLE_SIGN_IN && (
+                  <LoginButton icon={<FaApple size={16} />} onClick={comingSoon}>
+                    Continue with Apple
+                  </LoginButton>
+                )}
+                <LoginButton
+                  icon={<FaGoogle size={16} />}
+                  onClick={signInWithGoogle}
+                  loading={googleLoading}
+                >
                   Continue with Google
                 </LoginButton>
                 <LoginButton
@@ -210,19 +250,32 @@ export default function IntroScreen() {
 function LoginButton({
   icon,
   onClick,
+  loading = false,
   children,
 }: {
   icon: React.ReactNode;
   onClick: () => void;
+  loading?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-10 cursor-pointer items-center justify-center rounded-xl border border-[rgba(120,120,128,0.4)] bg-[rgba(60,60,67,0.8)] px-5 py-3 text-[17px] font-medium tracking-[-0.2px] text-white transition-opacity active:opacity-70"
+      disabled={loading}
+      aria-busy={loading}
+      className="flex min-h-10 cursor-pointer items-center justify-center rounded-xl border border-[rgba(120,120,128,0.4)] bg-[rgba(60,60,67,0.8)] px-5 py-3 text-[17px] font-medium tracking-[-0.2px] text-white transition-opacity active:opacity-70 disabled:cursor-not-allowed disabled:opacity-60"
     >
-      <span className="mr-3">{icon}</span>
+      <span className="mr-3 flex items-center">
+        {loading ? (
+          <span
+            aria-hidden
+            className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+          />
+        ) : (
+          icon
+        )}
+      </span>
       {children}
     </button>
   );
