@@ -1,4 +1,5 @@
 import { GeminiError, transcribeToPinyin } from "@/lib/gemini";
+import { checkRateLimit } from "@/lib/rateLimit";
 import { getUserFromAccessToken } from "@/lib/supabase-admin";
 
 // Runs on the Node.js runtime (the default). `export const runtime` is rejected under cacheComponents.
@@ -16,12 +17,18 @@ export async function POST(request: Request) {
   const match = request.headers.get("authorization")?.match(/^Bearer\s+(\S+)$/i);
   if (!match) return json({ error: "Unauthorized" }, 401);
 
+  let userId: string;
   try {
     const user = await getUserFromAccessToken(match[1]);
     if (!user) return json({ error: "Unauthorized" }, 401);
+    userId = user.id;
   } catch {
     console.error("transcribe-audio: auth check failed");
     return json({ error: "Transcription failed" }, 502);
+  }
+
+  if (!(await checkRateLimit(userId, "transcribe-audio"))) {
+    return json({ error: "Too many requests, try again later" }, 429);
   }
 
   // Cheap rejection from the header first, then the real size of what was sent.

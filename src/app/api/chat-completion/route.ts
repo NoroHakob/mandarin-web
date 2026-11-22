@@ -1,6 +1,7 @@
 import { findScenario } from "@/lib/course";
 import { GeminiError, generateContent, type GeminiContent } from "@/lib/gemini";
 import { isUserPremium } from "@/lib/premium";
+import { checkRateLimit } from "@/lib/rateLimit";
 import { getUserFromAccessToken } from "@/lib/supabase-admin";
 
 // Port of reference/supabase/functions/chat-completion (OpenRouter → Gemini): text and voice turns.
@@ -223,6 +224,10 @@ export async function POST(request: Request) {
   } catch {
     console.error("chat-completion: auth check failed");
     return json({ error: "Chat failed" }, 502);
+  }
+
+  if (!(await checkRateLimit(userId, "chat-completion"))) {
+    return json({ error: "Too many requests, try again later" }, 429);
   }
 
   let raw: string;

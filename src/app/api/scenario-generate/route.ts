@@ -1,5 +1,6 @@
 import { GeminiError, generateContent } from "@/lib/gemini";
 import { isUserPremium } from "@/lib/premium";
+import { checkRateLimit } from "@/lib/rateLimit";
 import { getUserFromAccessToken } from "@/lib/supabase-admin";
 
 // Port of reference/supabase/functions/scenario-generate (OpenRouter → Gemini REST API).
@@ -139,6 +140,10 @@ export async function POST(request: Request) {
   } catch {
     console.error("scenario-generate: profile read failed");
     return json({ error: "Could not generate scenario" }, 500);
+  }
+
+  if (!(await checkRateLimit(userId, "scenario-generate"))) {
+    return json({ error: "Too many requests, try again later" }, 429);
   }
 
   // Cheap rejection from the header first, then the real size of what was sent.
